@@ -1,5 +1,4 @@
 import * as PIXI from 'pixi.js';
-import scaleToWindow from './scale.js';
 
 import {
   canvasToFile,
@@ -13,10 +12,7 @@ import {
   setElementToCanvas,
 } from './utils.js';
 
-// const LIFE_CYCLE_TYPES = {
-//   STREAM_LOAD: "STREAM_LOAD",
-// }
-
+// 事件管理器
 class EventBus {
   constructor() {
     //定义事件总线对象
@@ -63,11 +59,11 @@ class UserMedia {
         facingMode: 'environment', // 选择摄像头
         // width: { ideal: 1280 }, // 纯数字简单值、ideal 理想值(不影响使用)，min/max、exact(即min=max) 强制值(无法响应该值时抛出异常)
         // height: { ideal: 720 }
-        // width: 1920,
-        // height: 1080,
-        zoom: 1.3,
-        width: 3840,
-        height: 2160,
+        width: 1920,
+        height: 1080,
+        zoom: 1,
+        // width: 3840,
+        // height: 2160,
       },
     }
     if (sync) {
@@ -196,25 +192,33 @@ export class CameraImpl {
     this.shotElement = safeElement(shotElement, 'canvas')
     this.shotContext = null
     this.videoEl = safeElement(videoEl, 'video')
-    this.pixelRatio = 1
-    this.openWebGl = true
+    // 摄像头配置
+    this.config = {
+      facingMode: 'environment', // 选择摄像头
+      width: { ideal: 1280 }, // 纯数字简单值、ideal 理想值(不影响使用)，min/max、exact(即min=max) 强制值(无法响应该值时抛出异常)
+      height: { ideal: 720 },
+      // width: 1920,
+      // height: 1080,
+      zoom: 1,
+      // pixelRatio: 1
+      // width: 3840,
+      // height: 2160,
+    }
+    // canvas2d config
     this.drawFrameConfig = { // videoToCanvas
       interval: undefined,
       // 使用requestAnimationFrame时防止短时间重复调用等配置
       diffTime: 90,
       prevTimestamp: 0,
     }
-    // 缩放配置
-    this.ZoomConfig = {
-      isZoom: false, // 现默认打开，此属性未参与计算
-      zoom: 2,
-    }
+    // webgl config
     this.PixiHandle = {
       app: undefined,
       renderer: undefined,
+      video: undefined
     }
-    // const openWebGl = true;
-    this.openWebGl = false;
+    this.openWebGl = true;
+    // this.openWebGl = false;
     this.draw = true;
     this.init()
   };
@@ -270,22 +274,38 @@ export class CameraImpl {
     });
     const texture = new PIXI.Texture(video_texture);
     const sprite = new PIXI.Sprite(texture);
+    // sprite.position.set(app.stage.width / 2, app.stage.height / 2)
+    console.log(app.stage.width, app.stage.height, 'position');
     app.stage.addChild(sprite);
-    app.renderer.autoDensity = true;
+    sprite.anchor.set(0.5); // 这会将原点设置为居中。(0.5)与(0.5, 0.5)相同。
+    app.stage.position.set(app.stage.width / 2, app.stage.height / 2);
+    // app.stage.position.set(0, 0);
+    sprite.position.set(0, 0)
     app.renderer.resize(width, height);
-    PixiHandle.app = app;
-    PixiHandle.renderer = app.renderer;
-    // setTimeout(() => {
-    //   // this.glToURL();
-    //   // this.glToPixel();
-    // }, 2000);
+    // app.renderer.autoDensity = true;
+    this.PixiHandle.app = app;
+    this.PixiHandle.video = sprite;
+    this.PixiHandle.renderer = app.renderer;
+  }
+  setGlZoom() {
+    const zoomVal = this.config.zoom
+    const renderer = this.PixiHandle.renderer;
+    const app = this.PixiHandle.app;
+    const videoSprite = this.PixiHandle.video;
+    videoSprite.scale.set(zoomVal, zoomVal);
+
+    // videoSprite.position.set(x, y)
+    // gsap.to(videoSprite, 0.5, {
+    //   zoom: 2,
+    //   // ease: Cubic.easeOut
+    // })
   }
   /**
    * 从webgl获取像素数组,宽高从目标对象上(如精灵，舞台容器等)获取
    * @returns RGBA Array
    */
   glToPixel() {
-    const renderer = PixiHandle.renderer;
+    const renderer = this.PixiHandle.renderer;
     const pixels = renderer.plugins.extract.pixels(app.stage);
     const pixelArr = Uint8ClampedArray.from(pixels);
     // 像素数组在3200x2160时长度为一千余万
@@ -293,15 +313,15 @@ export class CameraImpl {
     return pixelArr;
   }
   glToCanvas() {
-    const renderer = PixiHandle.renderer;
-    const app = PixiHandle.app;
+    const renderer = this.PixiHandle.renderer;
+    const app = this.PixiHandle.app;
     const newCanvasElement = renderer.plugins.extract.canvas(app.stage);
     // openURLOnNewWindow(base64);
     return newCanvasElement;
   }
   glToURL() {
-    const renderer = PixiHandle.renderer;
-    const app = PixiHandle.app;
+    const renderer = this.PixiHandle.renderer;
+    const app = this.this.PixiHandle.app;
     const base64 = renderer.plugins.extract.base64(app.stage);
     // openURLOnNewWindow(base64);
     return base64;
@@ -327,7 +347,7 @@ export class CameraImpl {
             sourceEl: _that.videoEl,
             width: _that.videoEl.videoWidth,
             height: _that.videoEl.videoHeight,
-            zoom: _that.ZoomConfig.zoom,
+            zoom: _that.config.zoom,
           };
           _that.canvasElement.height = _that.videoEl.videoHeight;
           _that.canvasElement.width = _that.videoEl.videoWidth;
@@ -388,7 +408,7 @@ export class CameraImpl {
     file_name = 'image.jpg'
   ) {
     const that = this;
-    const targetElment = ZoomConfig.isZoom
+    const targetElment = that.config.zoom !== 1
       ? that.shotElement
       : that.canvasElement;
     return canvasToFile({
@@ -397,6 +417,22 @@ export class CameraImpl {
       type,
       file_name,
     });
+  }
+  setZoom(value) {
+    const oldZoom = this.config.zoom
+    if (oldZoom !== value) {
+      this.config.zoom = value
+      if (this.userMedia.checkZoom()) {
+        this.userMedia.setZoom(value)
+      } else {
+        if (this.openWebGl) {
+          // todo 缩放及重置起点
+          this.setGlZoom()
+        } else {
+          // 在画布drwa时已经使用该zoom
+        }
+      }
+    }
   }
   // 关闭摄像头
   stopNavigator() {

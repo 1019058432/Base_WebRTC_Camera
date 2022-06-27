@@ -18,10 +18,13 @@
     <div v-if="imgSrc" class="img_bg_camera">
       <img :src="imgSrc" alt="" class="tx_img" />
     </div>
+    <div style="position: fixed; z-index: 20">
+      <button @click="handleZoom">zoom</button>
+    </div>
   </div>
 </template>
 <script>
-import { CameraImpl } from '../camera.js';
+import { CameraImpl } from '../src/camera.js';
 
 export default {
   name: 'camera',
@@ -66,6 +69,13 @@ export default {
     },
     canvasResizetoFile() {
       return this.camerImpl.canvasResizetoFile();
+    },
+    setZoom(value) {
+      return this.camerImpl.setZoom(value);
+    },
+    handleZoom() {
+      this.setZoom(this.camerImpl.config.zoom + 1);
+      console.log('zoom:', this.camerImpl.config.zoom);
     },
     // 相机错误抛出
     camerError(error) {
